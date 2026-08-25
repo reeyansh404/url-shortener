@@ -7,3 +7,9 @@ class Link(Base):
     long_url = Column(String)
     short_code = Column(String)
     
+class User(Base):
+    __tablename__ = "userdata"
+    id = Column(Integer, primary_key = True)
+    email = Column(String)
+    password = Column(String)
+    
