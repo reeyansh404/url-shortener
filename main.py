@@ -5,7 +5,10 @@ from fastapi.responses import RedirectResponse
 from database import SessionLocal
 from models import Link, User
 from sqlalchemy.orm import Session
-from auth import hash_password, verify_password, create_token
+from auth import hash_password, verify_password, create_token, decode_tokens
+from fastapi.security import OAuth2PasswordBearer
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app = FastAPI()
 db = {}
@@ -22,10 +25,19 @@ def get_db():
     yield db #pause the session 
     db.close()
     
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = decode_tokens(token)
+    user_id = int(payload.get("sub"))
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Token")
+    return user
+
+    
 @app.post("/shorten")
-def shorten_url(request: UrlRequest, db: Session = Depends(get_db)):
+def shorten_url(request: UrlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     shorten_code = str(uuid.uuid4())
-    link = Link(long_url = request.url ,  short_code = shorten_code)
+    link = Link(long_url = request.url ,  short_code = shorten_code, user_id = current_user.id)
     db.add(link)
     db.commit()
     return{"shorten_code" : shorten_code}
@@ -35,6 +47,8 @@ def redirect_url(shorten_code:str, db: Session = Depends(get_db)):
     output = db.query(Link).filter(Link.short_code == shorten_code).first()
     if output is None:
         raise HTTPException(status_code=404, detail='Short Code not found')
+    output.clicks += 1
+    db.commit()
     return RedirectResponse(output.long_url)
 
 

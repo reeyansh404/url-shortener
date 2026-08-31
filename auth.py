@@ -18,4 +18,6 @@ def create_token(user_id: int):
     }
     return jwt.encode(data, SECRET_KEY,algorithm = ALGORITHM)
     
+def decode_tokens(token: str):
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     
