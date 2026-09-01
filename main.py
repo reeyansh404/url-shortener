@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from pydantic import BaseModel
 import uuid
 from fastapi.responses import RedirectResponse
@@ -7,10 +7,19 @@ from models import Link, User
 from sqlalchemy.orm import Session
 from auth import hash_password, verify_password, create_token, decode_tokens
 from fastapi.security import OAuth2PasswordBearer
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app = FastAPI()
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    
+
 db = {}
 
 class UrlRequest(BaseModel):
@@ -26,7 +35,10 @@ def get_db():
     db.close()
     
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    payload = decode_tokens(token)
+    try:
+        payload = decode_tokens(token)
+    except:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     user_id = int(payload.get("sub"))
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -35,9 +47,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     
 @app.post("/shorten")
-def shorten_url(request: UrlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@limiter.limit("5/minute")
+def shorten_url(request: Request, body: UrlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     shorten_code = str(uuid.uuid4())
-    link = Link(long_url = request.url ,  short_code = shorten_code, user_id = current_user.id)
+    link = Link(long_url = body.url ,  short_code = shorten_code, user_id = current_user.id)
     db.add(link)
     db.commit()
     return{"shorten_code" : shorten_code}
