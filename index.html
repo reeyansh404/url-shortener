@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>URL Shortener</title>
+    </head>
+    <body>
+        <h1> URL Shortener</h1>
+
+        <input type ="text" id="urlInput" placeholder="Enter URL here" />
+        <input type="text" id="tokenInput" placeholder="Enter your token here" />
+        <button onClick = "shortenUrl()">Shorten</button>
+
+        <p id="result"></p>
+
+        <script>
+            async function shortenUrl() {
+                const url = document.getElementById("urlInput").value;
+                const token = document.getElementById("tokenInput").value;
+
+                const response = await fetch("/shorten",{
+                    method: "POST",
+                    headers: {
+                        "Content-Type":"application/json",
+                        "Authorization":"Bearer " + token
+                    },
+                    body: JSON.stringify({url:url})
+                });
+
+                const data = await response.json();
+                document.getElementById("result").innerText = "Short Code: http://127.0.0.1:8000/" + data.shorten_code;
+            }
+        </script>
+    </body>
+</html>
